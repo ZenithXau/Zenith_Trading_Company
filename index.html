@@ -115,7 +115,10 @@ let selectedAgent = null;
 
 async function loadFromBin() {
     try {
-        const res = await fetch(BIN_URL + "/latest", { headers: { "X-Master-Key": API_KEY } });
+        const res = await fetch(BIN_URL + "/latest", {
+            headers: { "X-Master-Key": API_KEY, "X-Access-Key": API_KEY }
+        });
+        if (!res.ok) throw new Error("bin error");
         const data = await res.json();
         const record = data.record || {};
         cryptoAgents = record.crypto || Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 20 + Math.random()*40, mistakes: 0, wins: 0 }));
@@ -124,7 +127,9 @@ async function loadFromBin() {
         journalEntries = record.journal || [];
         liveTrades = record.trades || [];
         openTrades = record.open || [];
+        console.log("Loaded from bin", liveTrades.length, "trades");
     } catch (e) {
+        console.warn("Bin load failed, using local", e);
         cryptoAgents = Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 20 + Math.random()*40, mistakes: 0, wins: 0 }));
         forexAgents = Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 15 + Math.random()*30, mistakes: 0, wins: 0 }));
         agentLogs = {};
@@ -150,9 +155,13 @@ function restoreJournal() {
 
 async function saveToBin() {
     try {
-        await fetch(BIN_URL, {
+        const res = await fetch(BIN_URL, {
             method: "PUT",
-            headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
+            headers: { 
+                "Content-Type": "application/json", 
+                "X-Master-Key": API_KEY,
+                "X-Access-Key": API_KEY
+            },
             body: JSON.stringify({
                 crypto: cryptoAgents,
                 forex: forexAgents,
@@ -162,7 +171,10 @@ async function saveToBin() {
                 open: openTrades
             })
         });
-    } catch (e) {}
+        if (res.ok) console.log("Saved to bin");
+    } catch (e) {
+        console.warn("Save failed", e);
+    }
 }
 
 function loadTV() {
