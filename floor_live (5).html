@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>ZENITH TRADING FLOOR</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: #0a0a0a; color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+#hud { position: absolute; top: 8px; left: 14px; font-size: 13px; letter-spacing: 3px; color: #d4af37; z-index: 10; font-weight: 700; background: rgba(10,10,10,0.9); padding: 4px 8px; border-radius: 4px; }
+.layout { display: flex; height: 100vh; padding-top: 36px; }
+.layout.maximized .side { display: none; }
+.layout.maximized .main { width: 100%; }
+.main { flex: 1; padding: 12px; overflow-y: auto; }
+.side { width: 420px; background: #111; border-left: 1px solid #222; padding: 14px; overflow-y: auto; }
+.dashboard { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 10px 0 12px; }
+.dash-card { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+.dash-card:hover { border-color: #d4af37; }
+.dash-card.active { border: 2px solid #d4af37; }
+.dash-label { font-size: 10px; color: #888; letter-spacing: 1px; }
+.dash-value { font-size: 16px; font-weight: 700; color: #d4af37; margin-top: 2px; }
+.dash-value.green { color: #22c55e; }
+.dash-value.red { color: #ef4444; }
+.timeframes { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.tf { background: #1a1a1a; border: 1px solid #333; color: #aaa; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+.tf.active { background: #d4af37; border-color: #d4af37; color: #000; }
+#tv_chart { width: 100%; height: 320px; background: #0d0d0d; border: 1px solid #222; border-radius: 4px; transition: height 0.3s; }
+#tv_chart.maximized { height: 75vh; }
+.chart-controls { text-align: right; margin-bottom: 4px; }
+.chart-btn { background: #1a1a1a; border: 1px solid #333; color: #d4af37; padding: 3px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+.agents { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.agent { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 8px; cursor: pointer; font-size: 12px; }
+.agent.selected { border: 2px solid #d4af37; }
+.agent.ready { border-color: #22c55e; box-shadow: 0 0 12px rgba(34,197,94,0.6); }
+.lamp { width: 8px; height: 8px; border-radius: 50%; background: #444; display: inline-block; margin-right: 6px; }
+.agent.ready .lamp { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+.subtitle { font-size: 9px; color: #d4af37; margin-top: 2px; }
+#panel { margin-top: 12px; background: #111; border: 1px solid #333; border-radius: 6px; padding: 12px; font-size: 12px; display: none; max-height: 260px; overflow-y: auto; }
+.journal-entry { background: #1a1a1a; padding: 6px 8px; border-radius: 4px; margin-bottom: 4px; font-size: 11px; border-left: 2px solid #d4af37; }
+.skill-top { background: #1a1a1a; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 12px; border: 1px solid #d4af37; }
+.detail-trade { background: #1a1a1a; padding: 8px; margin-bottom: 4px; border-radius: 4px; font-size: 11px; border-left: 2px solid #d4af37; }
+.promote-btn { background: #22c55e; color: #000; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="hud">ZENITH TRADING FLOOR</div>
+<div class="layout">
+    <div class="main">
+        <div style="font-size:11px;color:#888;margin:0 0 6px;">WALL</div>
+        <div class="timeframes" id="wallCoins">
+            <div class="tf active" data-coin="BINANCE:BTCUSDT">BTC</div>
+            <div class="tf" data-coin="BINANCE:SOLUSDT">SOL</div>
+            <div class="tf" data-coin="BINANCE:ETHUSDT">ETH</div>
+            <div class="tf" data-coin="OANDA:XAUUSD">XAU</div>
+            <div class="tf" data-coin="OANDA:XAGUSD">XAG</div>
+            <div class="tf" data-coin="CAPITALCOM:US30">US30</div>
+            <div class="tf" data-coin="CAPITALCOM:NAS100">NASDAQ</div>
+        </div>
+        <div class="timeframes" id="tfs">
+            <div class="tf active" data-tf="1">M1</div>
+            <div class="tf" data-tf="5">M5</div>
+            <div class="tf" data-tf="15">M15</div>
+            <div class="tf" data-tf="60">1H</div>
+            <div class="tf" data-tf="240">4H</div>
+            <div class="tf" data-tf="D">1D</div>
+            <div class="tf" data-tf="W">1W</div>
+        </div>
+        <div class="chart-controls"><button class="chart-btn" id="chartToggle">Maximieren</button></div>
+        <div id="tv_chart"></div>
+        <div class="dashboard">
+            <div class="dash-card" id="totalCard"><div class="dash-label">TOTAL TRADES</div><div class="dash-value" id="total">0</div></div>
+            <div class="dash-card" id="actualCard"><div class="dash-label">ACTUAL</div><div class="dash-value" id="actual">0</div></div>
+            <div class="dash-card"><div class="dash-label">PORTFOLIO</div><div class="dash-value" id="port">$200.00</div></div>
+            <div class="dash-card"><div class="dash-label">PnL</div><div class="dash-value green" id="pnl">+$0.00</div></div>
+            <div class="dash-card"><div class="dash-label">WIN RATE</div><div class="dash-value" id="win">0%</div></div>
+        </div>
+        <div class="agents" id="mainAgents">
+            <div class="agent" data-agent="Risk"><span class="lamp"></span>RISK<div class="subtitle">Oversight</div></div>
+            <div class="agent" data-agent="MEME"><span class="lamp"></span>MEME-AGENT<div class="subtitle">Wallets</div></div>
+            <div class="agent" data-agent="BTC"><span class="lamp"></span>BTC<div class="subtitle">Bitcoin</div></div>
+            <div class="agent" data-agent="ALT"><span class="lamp"></span>ALT<div class="subtitle">Alts</div></div>
+            <div class="agent" data-agent="Position"><span class="lamp"></span>POSITION<div class="subtitle">Exits</div></div>
+        </div>
+        <div id="panel">
+            <div id="panel-title"></div>
+            <div id="panel-content"></div>
+        </div>
+    </div>
+    <div class="side">
+        <div style="font-size:11px;letter-spacing:2px;color:#d4af37;margin-bottom:8px;">TRADING ACADEMY (CRYPTO)</div>
+        <div class="agents" id="trainCrypto"></div>
+        <div style="font-size:11px;letter-spacing:2px;color:#d4af37;margin:16px 0 8px;">TRADING ACADEMY (FOREX)</div>
+        <div class="agents" id="trainForex"></div>
+        <div style="margin-top:16px;font-size:11px;color:#888;">JOURNAL (Bot-Aktivität)</div>
+        <div id="journal"></div>
+    </div>
+</div>
+<script src="https://s3.tradingview.com/tv.js"></script>
+<script>
+const BIN_ID = "6acbcb30ffd5d16053620b81";
+const API_KEY = "$2a$10$qVh/C0VvbSjJM8zneVgIveh48ZcAdkY8.yZ3GlTUs6eiPXDIWIMZ2";
+const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+const TWELVE_KEY = "a8a0ba3bf3194505af4e302c081cfa4c";
+
+let widget = null;
+let currentSymbol = "BINANCE:BTCUSDT";
+let currentInterval = "1";
+let cryptoAgents = [];
+let forexAgents = [];
+let agentLogs = {};
+let journalEntries = [];
+let liveTrades = [];
+let openTrades = [];
+let panelMode = null;
+let selectedAgent = null;
+
+async function loadFromBin() {
+    try {
+        const res = await fetch(BIN_URL + "/latest", { headers: { "X-Master-Key": API_KEY } });
+        const data = await res.json();
+        const record = data.record || {};
+        cryptoAgents = record.crypto || Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 20 + Math.random()*40, mistakes: 0, wins: 0 }));
+        forexAgents = record.forex || Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 15 + Math.random()*30, mistakes: 0, wins: 0 }));
+        agentLogs = record.logs || {};
+        journalEntries = record.journal || [];
+        liveTrades = record.trades || [];
+        openTrades = record.open || [];
+    } catch (e) {
+        cryptoAgents = Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 20 + Math.random()*40, mistakes: 0, wins: 0 }));
+        forexAgents = Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 15 + Math.random()*30, mistakes: 0, wins: 0 }));
+        agentLogs = {};
+        journalEntries = [];
+        liveTrades = [];
+        openTrades = [];
+    }
+    renderAcademy();
+    restoreJournal();
+    updateDashboard();
+}
+
+function restoreJournal() {
+    const journal = document.getElementById('journal');
+    journal.innerHTML = "";
+    journalEntries.slice().reverse().forEach(entry => {
+        const el = document.createElement('div');
+        el.className = "journal-entry";
+        el.innerHTML = entry;
+        journal.prepend(el);
+    });
+}
+
+async function saveToBin() {
+    try {
+        await fetch(BIN_URL, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
+            body: JSON.stringify({
+                crypto: cryptoAgents,
+                forex: forexAgents,
+                logs: agentLogs,
+                journal: journalEntries.slice(0, 50),
+                trades: liveTrades.slice(0, 40),
+                open: openTrades
+            })
+        });
+    } catch (e) {}
+}
+
+function loadTV() {
+    if (widget) widget.remove();
+    widget = new TradingView.widget({
+        container_id: "tv_chart",
+        autosize: true,
+        symbol: currentSymbol,
+        interval: currentInterval,
+        timezone: "Etc/UTC",
+        theme: "dark",
+        style: "1",
+        locale: "de",
+        toolbar_bg: "#0a0a0a",
+        enable_publishing: false,
+        hide_top_toolbar: false,
+        allow_symbol_change: false,
+        backgroundColor: "#0d0d0d",
+        gridColor: "#1a1a1a"
+    });
+}
+
+document.getElementById('chartToggle').addEventListener('click', () => {
+    const layout = document.querySelector('.layout');
+    const chart = document.getElementById('tv_chart');
+    const btn = document.getElementById('chartToggle');
+    layout.classList.toggle('maximized');
+    chart.classList.toggle('maximized');
+    btn.textContent = chart.classList.contains('maximized') ? 'Minimieren' : 'Maximieren';
+    setTimeout(() => { if (widget && widget.resize) widget.resize(); }, 350);
+});
+
+document.getElementById('tfs').addEventListener('click', e => {
+    if (!e.target.dataset.tf) return;
+    document.querySelectorAll('#tfs .tf').forEach(t => t.classList.remove('active'));
+    e.target.classList.add('active');
+    currentInterval = e.target.dataset.tf;
+    loadTV();
+});
+
+document.getElementById('wallCoins').addEventListener('click', e => {
+    if (!e.target.dataset.coin) return;
+    document.querySelectorAll('#wallCoins .tf').forEach(t => t.classList.remove('active'));
+    e.target.classList.add('active');
+    currentSymbol = e.target.dataset.coin;
+    loadTV();
+});
+
+function selectAgentEl(el) {
+    if (selectedAgent === el) {
+        el.classList.remove('selected');
+        selectedAgent = null;
+        panel.style.display = "none";
+        return;
+    }
+    document.querySelectorAll('.agent').forEach(a => a.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedAgent = el;
+}
+
+const journal = document.getElementById('journal');
+const panel = document.getElementById('panel');
+
+function addBotLog(text, skill=null, pct=null, agentId=null) {
+    const entryText = `[${new Date().toLocaleTimeString()}] ${text}`;
+    journalEntries.unshift(entryText);
+    if (journalEntries.length > 50) journalEntries.pop();
+    if (skill) {
+        const top = document.createElement('div');
+        top.className = 'skill-top';
+        top.innerHTML = `<b>${skill}</b> · ${pct}%`;
+        journal.prepend(top);
+    }
+    const el = document.createElement('div');
+    el.className = 'journal-entry';
+    el.innerHTML = entryText;
+    journal.prepend(el);
+    if (journal.children.length > 25) journal.lastChild.remove();
+    if (agentId) {
+        if (!agentLogs[agentId]) agentLogs[agentId] = [];
+        agentLogs[agentId].unshift(entryText);
+        if (agentLogs[agentId].length > 20) agentLogs[agentId].pop();
+    }
+    saveToBin();
+}
+
+function showTrades(mode) {
+    if (panelMode === mode) {
+        panel.style.display = "none";
+        panelMode = null;
+        document.querySelectorAll('.dash-card').forEach(c => c.classList.remove('active'));
+        return;
+    }
+    panelMode = mode;
+    document.querySelectorAll('.dash-card').forEach(c => c.classList.remove('active'));
+    if (mode === "total") document.getElementById('totalCard').classList.add('active');
+    if (mode === "actual") document.getElementById('actualCard').classList.add('active');
+    panel.style.display = "block";
+    const list = mode === "total" ? liveTrades : openTrades;
+    document.getElementById('panel-title').innerHTML = mode === "total" 
+        ? `<b>Alle Trades</b> (${list.length})` 
+        : `<b>Offene Positionen</b> (${list.length})`;
+    document.getElementById('panel-content').innerHTML = list.map(t => `
+        <div class="detail-trade">
+            ${t.time} · ${t.agent} · ${t.coin} ${t.side}<br>
+            ${t.meme ? "Meme: " + t.meme + "<br>CA: " + t.ca + "<br>" : ""}
+            Entry: ${t.entry} · TP: ${t.tp} · SL: ${t.sl}<br>
+            ${t.exit ? "Exit: " + t.exit + " · " : "Offen · "}
+            <span style="color:${t.pnl>=0?'#22c55e':'#ef4444'}">PnL: ${t.pnl}%</span>
+        </div>
+    `).join("") || "Keine Trades";
+}
+
+document.getElementById('totalCard').addEventListener('click', () => showTrades("total"));
+document.getElementById('actualCard').addEventListener('click', () => showTrades("actual"));
+
+function updateDashboard() {
+    document.getElementById('total').textContent = liveTrades.length;
+    document.getElementById('actual').textContent = openTrades.length;
+    const totalPnl = liveTrades.reduce((s, t) => s + t.pnl, 0);
+    document.getElementById('pnl').textContent = (totalPnl >= 0 ? "+" : "") + totalPnl.toFixed(2);
+    document.getElementById('pnl').className = "dash-value " + (totalPnl >= 0 ? "green" : "red");
+    document.getElementById('port').textContent = "$" + (200 + totalPnl).toFixed(2);
+    const wins = liveTrades.filter(t => t.pnl > 0).length;
+    document.getElementById('win').textContent = liveTrades.length ? Math.round(wins / liveTrades.length * 100) + "%" : "0%";
+}
+
+const cryptoRoles = ["Pattern Learner", "News Scout", "MEME Scanner", "Volume Analyst"];
+const forexRoles = ["XAU Learner", "XAG Specialist", "US30 Analyst", "NASDAQ Trader", "Daily Setup", "Risk Student"];
+const trainingTopics = [
+    "Riskmanagement auf XAUUSD", "Market Maker Checker für BTCUSDT", "Volume-Analyse SOL",
+    "News-Impact ETH", "Session-Struktur XAU", "Liquidity Sweep BTC", "Orderblock ETH",
+    "MEME-Momentum Scanner", "US30 Session Bias", "NASDAQ Momentum", "Silver Correlation mit Gold"
+];
+const mainAgents = ["BTC", "MEME", "ALT", "Risk", "Position"];
+const memeCoins = [
+    { name: "BONK", ca: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263" },
+    { name: "WIF", ca: "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm" },
+    { name: "POPCAT", ca: "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr" }
+];
+
+function renderAcademy() {
+    const cEl = document.getElementById('trainCrypto');
+    cEl.innerHTML = cryptoAgents.map(a => `
+        <div class="agent ${a.progress >= 95 ? 'ready' : ''}" data-id="${a.id}">
+            <span class="lamp"></span>${a.id}
+            <div class="subtitle">${a.role} · ${Math.floor(a.progress)}%</div>
+        </div>
+    `).join("");
+    const fEl = document.getElementById('trainForex');
+    fEl.innerHTML = forexAgents.map(a => `
+        <div class="agent ${a.progress >= 95 ? 'ready' : ''}" data-id="${a.id}">
+            <span class="lamp"></span>${a.id}
+            <div class="subtitle">${a.role} · ${Math.floor(a.progress)}%</div>
+        </div>
+    `).join("");
+
+    document.querySelectorAll('#trainCrypto .agent, #trainForex .agent').forEach(el => {
+        el.addEventListener('click', () => {
+            selectAgentEl(el);
+            if (!el.classList.contains('selected')) return;
+            const id = el.dataset.id;
+            const list = id.startsWith('C') ? cryptoAgents : forexAgents;
+            const ag = list.find(x => x.id === id);
+            const logs = agentLogs[id] || ["Noch keine Aktivität"];
+            panel.style.display = "block";
+            document.getElementById('panel-title').innerHTML = `<b>${id}</b> · ${ag.role}`;
+            let content = `
+                Fortschritt: ${Math.floor(ag.progress)}%<br>
+                Wins: ${ag.wins || 0} · Fehler: ${ag.mistakes || 0}<br>
+                <div style="margin-top:6px;">${logs.slice(0,8).map(l => `<div>${l}</div>`).join("")}</div>
+            `;
+            if (ag.progress >= 95) {
+                content += `<button class="promote-btn" data-id="${id}">Als Trader übernehmen?</button>`;
+            }
+            document.getElementById('panel-content').innerHTML = content;
+            const btn = document.querySelector('.promote-btn');
+            if (btn) {
+                btn.onclick = () => {
+                    addBotLog(`${id} wurde als Trader übernommen`, ag.role, Math.floor(ag.progress), id);
+                    panel.style.display = "none";
+                    el.classList.remove('selected');
+                };
+            }
+        });
+    });
+}
+
+document.getElementById('mainAgents').addEventListener('click', e => {
+    const a = e.target.closest('.agent');
+    if (!a) return;
+    selectAgentEl(a);
+    if (!a.classList.contains('selected')) return;
+    panel.style.display = "block";
+    const name = a.dataset.agent;
+    document.getElementById('panel-title').innerHTML = `<b>${name}</b>`;
+    document.getElementById('panel-content').innerHTML = `Session aktiv · Paper-Trading<br>Confidence: ${60 + Math.floor(Math.random()*30)}%`;
+});
+
+async function getBinancePrice(symbol) {
+    try {
+        const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+        const data = await res.json();
+        return parseFloat(data.price);
+    } catch (e) { return null; }
+}
+
+async function getTwelvePrice(symbol) {
+    try {
+        const res = await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_KEY}`);
+        const data = await res.json();
+        if (data.price) return parseFloat(data.price);
+    } catch (e) {}
+    return null;
+}
+
+function getSimulatedPrice(coin) {
+    const ranges = { BTC: 84150, SOL: 147.8, ETH: 3412, XAU: 2648, XAG: 31.4, US30: 42800, NASDAQ: 19850, MEME: 0.00042 };
+    const base = ranges[coin] || 100;
+    return base + (Math.random()-0.5)*base*0.004;
+}
+
+setInterval(async () => {
+    cryptoAgents.forEach(a => {
+        a.progress = Math.min(100, a.progress + Math.random()*2.8);
+        if (Math.random() > 0.92) a.mistakes = (a.mistakes || 0) + 1;
+        if (Math.random() > 0.88) a.wins = (a.wins || 0) + 1;
+        if (a.progress > 82 && a.role === "Trainee") {
+            a.role = cryptoRoles[Math.floor(Math.random()*cryptoRoles.length)];
+            const topic = trainingTopics[Math.floor(Math.random()*trainingTopics.length)];
+            addBotLog(`${a.id} spezialisiert → ${a.role} (${topic})`, a.role, Math.floor(a.progress), a.id);
+        }
+        if (a.progress >= 95 && Math.random() > 0.85) {
+            addBotLog(`${a.id} ist bereit und fragt nach Trader-Status`, a.role, Math.floor(a.progress), a.id);
+        }
+    });
+    forexAgents.forEach(a => {
+        const weekend = [0,6].includes(new Date().getDay());
+        a.progress = Math.min(100, a.progress + (weekend ? 0.3 : 1.8) + Math.random()*1.2);
+        if (Math.random() > 0.93) a.mistakes = (a.mistakes || 0) + 1;
+        if (Math.random() > 0.89) a.wins = (a.wins || 0) + 1;
+        if (a.progress > 85 && a.role === "Trainee") {
+            a.role = forexRoles[Math.floor(Math.random()*forexRoles.length)];
+            const topic = trainingTopics[Math.floor(Math.random()*trainingTopics.length)];
+            addBotLog(`${a.id} spezialisiert → ${a.role} (${topic})`, a.role, Math.floor(a.progress), a.id);
+        }
+        if (a.progress >= 95 && Math.random() > 0.85) {
+            addBotLog(`${a.id} ist bereit und fragt nach Trader-Status`, a.role, Math.floor(a.progress), a.id);
+        }
+    });
+    renderAcademy();
+
+    if (Math.random() > 0.62) {
+        const agent = mainAgents[Math.floor(Math.random()*mainAgents.length)];
+        let coin = "BTC";
+        if (agent === "MEME") coin = "MEME";
+        else if (agent === "ALT") coin = Math.random() > 0.5 ? "SOL" : "ETH";
+        else coin = ["BTC","SOL","ETH","XAU","XAG","US30","NASDAQ"][Math.floor(Math.random()*7)];
+
+        let entry = 100;
+        if (coin === "BTC") entry = await getBinancePrice("BTCUSDT") || getSimulatedPrice("BTC");
+        else if (coin === "SOL") entry = await getBinancePrice("SOLUSDT") || getSimulatedPrice("SOL");
+        else if (coin === "ETH") entry = await getBinancePrice("ETHUSDT") || getSimulatedPrice("ETH");
+        else if (coin === "XAU") entry = await getTwelvePrice("XAU/USD") || getSimulatedPrice("XAU");
+        else if (coin === "XAG") entry = await getTwelvePrice("XAG/USD") || getSimulatedPrice("XAG");
+        else if (coin === "US30") entry = await getTwelvePrice("DJI") || getSimulatedPrice("US30");
+        else if (coin === "NASDAQ") entry = await getTwelvePrice("IXIC") || getSimulatedPrice("NASDAQ");
+        else entry = getSimulatedPrice(coin);
+
+        const isLong = Math.random() > 0.45;
+        const pnl = (Math.random()*2.4 - 0.8).toFixed(2);
+        const decimals = coin === "MEME" ? 6 : 2;
+        const tp = (entry * (isLong ? 1.011 : 0.989)).toFixed(decimals);
+        const sl = (entry * (isLong ? 0.989 : 1.011)).toFixed(decimals);
+        const exit = (entry * (1 + parseFloat(pnl)/100)).toFixed(decimals);
+
+        let meme = null, ca = null;
+        if (coin === "MEME") {
+            const m = memeCoins[Math.floor(Math.random()*memeCoins.length)];
+            meme = m.name;
+            ca = m.ca;
+        }
+
+        const trade = {
+            time: new Date().toLocaleTimeString(),
+            coin, side: isLong ? "LONG" : "SHORT", agent,
+            entry: entry.toFixed(decimals), tp, sl, exit,
+            pnl: parseFloat(pnl), meme, ca
+        };
+
+        if (Math.random() > 0.55) {
+            openTrades.unshift({...trade, exit: null});
+            if (openTrades.length > 8) openTrades.pop();
+        } else {
+            liveTrades.unshift(trade);
+            if (liveTrades.length > 40) liveTrades.pop();
+        }
+
+        addBotLog(`${agent} Trade ${coin}${meme ? " ("+meme+")" : ""} ${trade.side} @ ${trade.entry} · PnL ${pnl}%`);
+        updateDashboard();
+    }
+    saveToBin();
+}, 9000);
+
+setInterval(() => {
+    document.querySelectorAll('#trainCrypto .agent, #trainForex .agent').forEach(a => {
+        const id = a.dataset.id;
+        const list = id.startsWith('C') ? cryptoAgents : forexAgents;
+        const ag = list.find(x => x.id === id);
+        if (ag && ag.progress >= 95) a.classList.add('ready');
+    });
+}, 4000);
+
+loadFromBin();
+loadTV();
+</script>
+</body>
+</html>
