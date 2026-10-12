@@ -40,6 +40,11 @@ body { margin: 0; background: #0a0a0a; color: #f5f5f5; font-family: -apple-syste
 .detail-trade { background: #1a1a1a; padding: 8px; margin-bottom: 4px; border-radius: 4px; font-size: 11px; border-left: 2px solid #d4af37; }
 .promote-btn, .demote-btn { background: #22c55e; color: #000; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-top: 8px; margin-right: 6px; }
 .demote-btn { background: #ef4444; color: #fff; }
+.journal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#journal { max-height: 380px; overflow-y: auto; padding-right: 4px; }
+#journal::-webkit-scrollbar { width: 6px; }
+#journal::-webkit-scrollbar-thumb { background: #d4af37; border-radius: 3px; }
+#agentFilter { background: #1a1a1a; border: 1px solid #333; color: #f5f5f5; padding: 4px 8px; border-radius: 4px; font-size: 11px; }
 </style>
 </head>
 <body>
@@ -85,7 +90,18 @@ body { margin: 0; background: #0a0a0a; color: #f5f5f5; font-family: -apple-syste
         <div class="agents" id="trainCrypto"></div>
         <div style="font-size:11px;letter-spacing:2px;color:#d4af37;margin:16px 0 8px;">TRADING ACADEMY (FOREX)</div>
         <div class="agents" id="trainForex"></div>
-        <div style="margin-top:16px;font-size:11px;color:#888;">JOURNAL (Bot-Aktivität)</div>
+        <div class="journal-header">
+            <div style="font-size:11px;color:#888;">JOURNAL (Bot-Aktivität)</div>
+            <select id="agentFilter">
+                <option value="">Alle Agents</option>
+                <option value="Risk">Risk</option>
+                <option value="MEME">MEME</option>
+                <option value="BTC">BTC</option>
+                <option value="ALT">ALT</option>
+                <option value="Position">Position</option>
+                <option value="FOREX">FOREX</option>
+            </select>
+        </div>
         <div id="journal"></div>
     </div>
 </div>
@@ -108,6 +124,7 @@ let liveTrades = [];
 let openTrades = [];
 let panelMode = null;
 let selectedAgent = null;
+let currentFilter = "";
 
 function ensureAgents() {
     if (!cryptoAgents || !cryptoAgents.length) {
@@ -125,9 +142,7 @@ function ensureAgents() {
 
 async function loadFromBin() {
     try {
-        const res = await fetch(BIN_URL + "/latest", {
-            headers: { "X-Access-Key": ACCESS_KEY }
-        });
+        const res = await fetch(BIN_URL + "/latest", { headers: { "X-Access-Key": ACCESS_KEY } });
         if (!res.ok) throw new Error(res.status);
         const data = await res.json();
         const record = data.record || {};
@@ -150,19 +165,26 @@ async function loadFromBin() {
 }
 
 function restoreJournal() {
+    renderJournal();
+}
+
+function renderJournal() {
     const journal = document.getElementById('journal');
     journal.innerHTML = "";
-    journalEntries.slice().reverse().forEach(entry => {
+    const filtered = currentFilter 
+        ? journalEntries.filter(e => e.includes(currentFilter))
+        : journalEntries;
+    filtered.slice().reverse().forEach(entry => {
         const el = document.createElement('div');
         el.className = "journal-entry";
         el.innerHTML = entry;
-        journal.prepend(el);
+        journal.appendChild(el);
     });
 }
 
 async function saveToBin() {
     try {
-        const res = await fetch(BIN_URL, {
+        await fetch(BIN_URL, {
             method: "PUT",
             headers: { "Content-Type": "application/json", "X-Access-Key": ACCESS_KEY },
             body: JSON.stringify({
@@ -175,10 +197,7 @@ async function saveToBin() {
                 open: openTrades
             })
         });
-        console.log("Save status:", res.status);
-    } catch (e) {
-        console.warn("Save error", e);
-    }
+    } catch (e) {}
 }
 
 function loadTV() {
@@ -227,6 +246,11 @@ document.getElementById('wallCoins').addEventListener('click', e => {
     loadTV();
 });
 
+document.getElementById('agentFilter').addEventListener('change', e => {
+    currentFilter = e.target.value;
+    renderJournal();
+});
+
 function selectAgentEl(el) {
     if (selectedAgent === el) {
         el.classList.remove('selected');
@@ -245,18 +269,8 @@ const panel = document.getElementById('panel');
 function addBotLog(text, skill=null, pct=null, agentId=null) {
     const entryText = `[${new Date().toLocaleTimeString()}] ${text}`;
     journalEntries.unshift(entryText);
-    if (journalEntries.length > 50) journalEntries.pop();
-    if (skill) {
-        const top = document.createElement('div');
-        top.className = 'skill-top';
-        top.innerHTML = `<b>${skill}</b> · ${pct}%`;
-        journal.prepend(top);
-    }
-    const el = document.createElement('div');
-    el.className = 'journal-entry';
-    el.innerHTML = entryText;
-    journal.prepend(el);
-    if (journal.children.length > 25) journal.lastChild.remove();
+    if (journalEntries.length > 80) journalEntries.pop();
+    renderJournal();
     if (agentId) {
         if (!agentLogs[agentId]) agentLogs[agentId] = [];
         agentLogs[agentId].unshift(entryText);
@@ -314,11 +328,12 @@ const trainingTopics = [
     "MEME-Momentum Scanner", "US30 Session Bias", "NASDAQ Momentum", "Silver Correlation mit Gold"
 ];
 const defaultMain = [
-    { id: "Risk", subtitle: "Oversight" },
+    { id: "Risk", subtitle: "Checks all" },
     { id: "MEME", subtitle: "Wallets" },
     { id: "BTC", subtitle: "Bitcoin" },
     { id: "ALT", subtitle: "Alts" },
-    { id: "Position", subtitle: "Exits" }
+    { id: "Position", subtitle: "STOP / GO" },
+    { id: "FOREX", subtitle: "XAU XAG US30 NASDAQ" }
 ];
 const memeCoins = [
     { name: "BONK", ca: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263" },
@@ -428,15 +443,6 @@ async function getBinancePrice(symbol) {
     } catch (e) { return null; }
 }
 
-async function getTwelvePrice(symbol) {
-    try {
-        const res = await fetch(`https://api.twelvedata.com/price?symbol=${symbol}&apikey=${TWELVE_KEY}`);
-        const data = await res.json();
-        if (data.price) return parseFloat(data.price);
-    } catch (e) {}
-    return null;
-}
-
 function getSimulatedPrice(coin) {
     const ranges = { BTC: 84150, SOL: 147.8, ETH: 3412, XAU: 2648, XAG: 60.8, US30: 42800, NASDAQ: 19850, MEME: 0.00042 };
     const base = ranges[coin] || 100;
@@ -475,21 +481,21 @@ setInterval(async () => {
     renderAcademy();
 
     if (Math.random() > 0.62) {
-        const mainIds = ["Risk","MEME","BTC","ALT","Position", ...promotedAgents.map(a => a.id)];
+        const mainIds = ["Risk","MEME","BTC","ALT","Position","FOREX", ...promotedAgents.map(a => a.id)];
         const agent = mainIds[Math.floor(Math.random()*mainIds.length)];
         let coin = "BTC";
-        if (agent === "MEME") coin = "MEME";
+        if (agent === "BTC") coin = "BTC";
         else if (agent === "ALT") coin = Math.random() > 0.5 ? "SOL" : "ETH";
-        else coin = ["BTC","SOL","ETH","XAU","XAG","US30","NASDAQ"][Math.floor(Math.random()*7)];
+        else if (agent === "MEME") coin = "MEME";
+        else if (agent === "FOREX") coin = ["XAU","XAG","US30","NASDAQ"][Math.floor(Math.random()*4)];
+        else if (agent === "Risk") coin = ["BTC","SOL","ETH","XAU"][Math.floor(Math.random()*4)];
+        else if (agent === "Position") coin = ["BTC","SOL","ETH","XAU","XAG"][Math.floor(Math.random()*5)];
+        else coin = "BTC";
 
         let entry = 100;
         if (coin === "BTC") entry = await getBinancePrice("BTCUSDT") || getSimulatedPrice("BTC");
         else if (coin === "SOL") entry = await getBinancePrice("SOLUSDT") || getSimulatedPrice("SOL");
         else if (coin === "ETH") entry = await getBinancePrice("ETHUSDT") || getSimulatedPrice("ETH");
-        else if (coin === "XAU") entry = await getTwelvePrice("XAUUSD") || getSimulatedPrice("XAU");
-        else if (coin === "XAG") entry = await getTwelvePrice("XAGUSD") || getSimulatedPrice("XAG");
-        else if (coin === "US30") entry = await getTwelvePrice("DIA") || getSimulatedPrice("US30");
-        else if (coin === "NASDAQ") entry = await getTwelvePrice("QQQ") || getSimulatedPrice("NASDAQ");
         else entry = getSimulatedPrice(coin);
 
         const isLong = Math.random() > 0.45;
