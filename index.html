@@ -91,7 +91,7 @@ body { margin: 0; background: #0a0a0a; color: #f5f5f5; font-family: -apple-syste
 </div>
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script>
-const BIN_ID = "6acc8dfcffd5d16053637359";
+const BIN_ID = "6acbcb30ffd5d16053620b81";
 const ACCESS_KEY = "$2a$10$Q.INdPZI/hpyLQXoNjZLm.cvniQQ3bHQkqCIIXW0wdEH/yjLYTsJC";
 const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
 const TWELVE_KEY = "a8a0ba3bf3194505af4e302c081cfa4c";
@@ -109,30 +109,43 @@ let openTrades = [];
 let panelMode = null;
 let selectedAgent = null;
 
+function ensureAgents() {
+    if (!cryptoAgents || !cryptoAgents.length) {
+        cryptoAgents = Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 12 + Math.random()*25, mistakes: 0, wins: 0 }));
+    }
+    if (!forexAgents || !forexAgents.length) {
+        forexAgents = Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 8 + Math.random()*20, mistakes: 0, wins: 0 }));
+    }
+    if (!promotedAgents) promotedAgents = [];
+    if (!agentLogs) agentLogs = {};
+    if (!journalEntries) journalEntries = [];
+    if (!liveTrades) liveTrades = [];
+    if (!openTrades) openTrades = [];
+}
+
 async function loadFromBin() {
     try {
         const res = await fetch(BIN_URL + "/latest", {
             headers: { "X-Access-Key": ACCESS_KEY }
         });
-        if (!res.ok) throw new Error(res.status);
+        if (!res.ok) {
+            console.warn("Load status:", res.status);
+            throw new Error(res.status);
+        }
         const data = await res.json();
         const record = data.record || {};
-        cryptoAgents = record.crypto || Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 12 + Math.random()*25, mistakes: 0, wins: 0 }));
-        forexAgents = record.forex || Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 8 + Math.random()*20, mistakes: 0, wins: 0 }));
+        cryptoAgents = record.crypto || [];
+        forexAgents = record.forex || [];
         promotedAgents = record.promoted || [];
         agentLogs = record.logs || {};
         journalEntries = record.journal || [];
         liveTrades = record.trades || [];
         openTrades = record.open || [];
+        console.log("Loaded", liveTrades.length, "trades");
     } catch (e) {
-        cryptoAgents = Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 12 + Math.random()*25, mistakes: 0, wins: 0 }));
-        forexAgents = Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 8 + Math.random()*20, mistakes: 0, wins: 0 }));
-        promotedAgents = [];
-        agentLogs = {};
-        journalEntries = [];
-        liveTrades = [];
-        openTrades = [];
+        console.warn("Load failed", e);
     }
+    ensureAgents();
     renderAcademy();
     renderMainAgents();
     restoreJournal();
@@ -152,9 +165,12 @@ function restoreJournal() {
 
 async function saveToBin() {
     try {
-        await fetch(BIN_URL, {
+        const res = await fetch(BIN_URL, {
             method: "PUT",
-            headers: { "Content-Type": "application/json", "X-Access-Key": ACCESS_KEY },
+            headers: { 
+                "Content-Type": "application/json", 
+                "X-Access-Key": ACCESS_KEY
+            },
             body: JSON.stringify({
                 crypto: cryptoAgents,
                 forex: forexAgents,
@@ -165,7 +181,11 @@ async function saveToBin() {
                 open: openTrades
             })
         });
-    } catch (e) {}
+        console.log("Save status:", res.status);
+        if (!res.ok) console.warn("Save failed", await res.text());
+    } catch (e) {
+        console.warn("Save error", e);
+    }
 }
 
 function loadTV() {
@@ -431,6 +451,7 @@ function getSimulatedPrice(coin) {
 }
 
 setInterval(async () => {
+    ensureAgents();
     cryptoAgents.forEach(a => {
         a.progress = Math.min(100, a.progress + Math.random()*0.28);
         if (Math.random() > 0.96) a.mistakes = (a.mistakes || 0) + 1;
@@ -513,6 +534,9 @@ setInterval(async () => {
     saveToBin();
 }, 9000);
 
+ensureAgents();
+renderAcademy();
+renderMainAgents();
 loadFromBin();
 loadTV();
 </script>
