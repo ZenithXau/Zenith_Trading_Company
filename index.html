@@ -12,9 +12,11 @@ body { margin: 0; background: #0a0a0a; color: #f5f5f5; font-family: -apple-syste
 .layout.maximized .main { width: 100%; }
 .main { flex: 1; padding: 12px; overflow-y: auto; }
 .side { width: 420px; background: #111; border-left: 1px solid #222; padding: 14px; overflow-y: auto; }
-.dashboard { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 10px 0 12px; }
+.dashboard { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 10px 0 12px; }
 .dash-card { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+.dash-card.no-click { cursor: default; }
 .dash-card:hover { border-color: #d4af37; }
+.dash-card.no-click:hover { border-color: #333; }
 .dash-card.active { border: 2px solid #d4af37; }
 .dash-label { font-size: 10px; color: #888; letter-spacing: 1px; }
 .dash-value { font-size: 16px; font-weight: 700; color: #d4af37; margin-top: 2px; }
@@ -73,11 +75,12 @@ body { margin: 0; background: #0a0a0a; color: #f5f5f5; font-family: -apple-syste
         <div class="chart-controls"><button class="chart-btn" id="chartToggle">Maximieren</button></div>
         <div id="tv_chart"></div>
         <div class="dashboard">
-            <div class="dash-card" id="totalCard"><div class="dash-label">TOTAL TRADES</div><div class="dash-value" id="total">0</div></div>
-            <div class="dash-card" id="actualCard"><div class="dash-label">ACTUAL</div><div class="dash-value" id="actual">0</div></div>
-            <div class="dash-card"><div class="dash-label">PORTFOLIO</div><div class="dash-value" id="port">$200.00</div></div>
-            <div class="dash-card"><div class="dash-label">PnL</div><div class="dash-value green" id="pnl">+$0.00</div></div>
-            <div class="dash-card"><div class="dash-label">WIN RATE</div><div class="dash-value" id="win">0%</div></div>
+            <div class="dash-card" id="totalCard"><div class="dash-label">TOTAL TRADES (CURRENT DAY)</div><div class="dash-value" id="total">0</div></div>
+            <div class="dash-card" id="actualCard"><div class="dash-label">ACTUAL OPEN TRADES</div><div class="dash-value" id="actual">0</div></div>
+            <div class="dash-card no-click"><div class="dash-label">TOTAL TRADES</div><div class="dash-value" id="grandTotal">0</div></div>
+            <div class="dash-card no-click"><div class="dash-label">PORTFOLIO</div><div class="dash-value" id="port">$200.00</div></div>
+            <div class="dash-card no-click"><div class="dash-label">PnL</div><div class="dash-value green" id="pnl">+$0.00</div></div>
+            <div class="dash-card no-click"><div class="dash-label">WIN RATE</div><div class="dash-value" id="win">0%</div></div>
         </div>
         <div class="agents" id="mainAgents"></div>
         <div id="panel">
@@ -110,7 +113,6 @@ body { margin: 0; background: #0a0a0a; color: #f5f5f5; font-family: -apple-syste
 const BIN_ID = "6acbcb30ffd5d16053620b81";
 const ACCESS_KEY = "$2a$10$Q.INdPZI/hpyLQXoNjZLm.cvniQQ3bHQkqCIIXW0wdEH/yjLYTsJC";
 const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
-const TWELVE_KEY = "a8a0ba3bf3194505af4e302c081cfa4c";
 
 let widget = null;
 let currentSymbol = "BINANCE:BTCUSDT";
@@ -153,19 +155,12 @@ async function loadFromBin() {
         journalEntries = record.journal || [];
         liveTrades = record.trades || [];
         openTrades = record.open || [];
-        console.log("Loaded", liveTrades.length, "trades");
-    } catch (e) {
-        console.warn("Load failed", e);
-    }
+    } catch (e) {}
     ensureAgents();
     renderAcademy();
     renderMainAgents();
-    restoreJournal();
-    updateDashboard();
-}
-
-function restoreJournal() {
     renderJournal();
+    updateDashboard();
 }
 
 function renderJournal() {
@@ -174,7 +169,7 @@ function renderJournal() {
     const filtered = currentFilter 
         ? journalEntries.filter(e => e.includes(currentFilter))
         : journalEntries;
-    filtered.slice().reverse().forEach(entry => {
+    filtered.slice(0, 40).reverse().forEach(entry => {
         const el = document.createElement('div');
         el.className = "journal-entry";
         el.innerHTML = entry;
@@ -192,8 +187,8 @@ async function saveToBin() {
                 forex: forexAgents,
                 promoted: promotedAgents,
                 logs: agentLogs,
-                journal: journalEntries.slice(0, 50),
-                trades: liveTrades.slice(0, 40),
+                journal: journalEntries.slice(0, 80),
+                trades: liveTrades.slice(0, 1000),
                 open: openTrades
             })
         });
@@ -263,13 +258,12 @@ function selectAgentEl(el) {
     selectedAgent = el;
 }
 
-const journal = document.getElementById('journal');
 const panel = document.getElementById('panel');
 
 function addBotLog(text, skill=null, pct=null, agentId=null) {
     const entryText = `[${new Date().toLocaleTimeString()}] ${text}`;
     journalEntries.unshift(entryText);
-    if (journalEntries.length > 80) journalEntries.pop();
+    if (journalEntries.length > 100) journalEntries.pop();
     renderJournal();
     if (agentId) {
         if (!agentLogs[agentId]) agentLogs[agentId] = [];
@@ -312,7 +306,8 @@ document.getElementById('actualCard').addEventListener('click', () => showTrades
 function updateDashboard() {
     document.getElementById('total').textContent = liveTrades.length;
     document.getElementById('actual').textContent = openTrades.length;
-    const totalPnl = liveTrades.reduce((s, t) => s + t.pnl, 0);
+    document.getElementById('grandTotal').textContent = liveTrades.length;
+    const totalPnl = liveTrades.reduce((s, t) => s + (t.pnl || 0), 0);
     document.getElementById('pnl').textContent = (totalPnl >= 0 ? "+" : "") + totalPnl.toFixed(2);
     document.getElementById('pnl').className = "dash-value " + (totalPnl >= 0 ? "green" : "red");
     document.getElementById('port').textContent = "$" + (200 + totalPnl).toFixed(2);
@@ -322,10 +317,11 @@ function updateDashboard() {
 
 const cryptoRoles = ["Pattern Learner", "News Scout", "MEME Scanner", "Volume Analyst"];
 const forexRoles = ["XAU Learner", "XAG Specialist", "US30 Analyst", "NASDAQ Trader", "Daily Setup", "Risk Student"];
-const trainingTopics = [
-    "Riskmanagement auf XAUUSD", "Market Maker Checker für BTCUSDT", "Volume-Analyse SOL",
-    "News-Impact ETH", "Session-Struktur XAU", "Liquidity Sweep BTC", "Orderblock ETH",
-    "MEME-Momentum Scanner", "US30 Session Bias", "NASDAQ Momentum", "Silver Correlation mit Gold"
+const cryptoTopics = [
+    "Volume-Analyse SOL", "News-Impact ETH", "Liquidity Sweep BTC", "Orderblock ETH", "MEME-Momentum Scanner", "BTC Volume Profile"
+];
+const forexTopics = [
+    "Riskmanagement auf XAUUSD", "Session-Struktur XAU", "US30 Session Bias", "NASDAQ Momentum", "Silver Correlation mit Gold", "Daily Setup XAG"
 ];
 const defaultMain = [
     { id: "Risk", subtitle: "Checks all" },
@@ -368,10 +364,14 @@ function renderMainAgents() {
                 demoteBtn.onclick = () => {
                     const ag = promotedAgents.find(x => x.id === id);
                     if (ag) {
+                        ag.progress = 85;
+                        ag.role = "Trainee";
+                        cryptoAgents = cryptoAgents.filter(x => x.id !== id);
+                        forexAgents = forexAgents.filter(x => x.id !== id);
+                        promotedAgents = promotedAgents.filter(x => x.id !== id);
                         if (id.startsWith("C")) cryptoAgents.push(ag);
                         else forexAgents.push(ag);
-                        promotedAgents = promotedAgents.filter(x => x.id !== id);
-                        addBotLog(`${id} zurück in Academy (Fortschritt ${Math.floor(ag.progress)}% bleibt erhalten)`, ag.role, Math.floor(ag.progress), id);
+                        addBotLog(`${id} zurück in Academy (Fortschritt auf 85% gesetzt)`, ag.role, Math.floor(ag.progress), id);
                         renderAcademy();
                         renderMainAgents();
                         panel.style.display = "none";
@@ -406,6 +406,7 @@ function renderAcademy() {
             const id = el.dataset.id;
             const list = id.startsWith('C') ? cryptoAgents : forexAgents;
             const ag = list.find(x => x.id === id);
+            if (!ag) return;
             const logs = agentLogs[id] || ["Noch keine Aktivität"];
             panel.style.display = "block";
             document.getElementById('panel-title').innerHTML = `<b>${id}</b> · ${ag.role}`;
@@ -423,7 +424,7 @@ function renderAcademy() {
                 btn.onclick = () => {
                     if (id.startsWith("C")) cryptoAgents = cryptoAgents.filter(x => x.id !== id);
                     else forexAgents = forexAgents.filter(x => x.id !== id);
-                    promotedAgents.push(ag);
+                    if (!promotedAgents.find(x => x.id === id)) promotedAgents.push(ag);
                     addBotLog(`${id} als Trader übernommen`, ag.role, Math.floor(ag.progress), id);
                     renderAcademy();
                     renderMainAgents();
@@ -452,35 +453,35 @@ function getSimulatedPrice(coin) {
 setInterval(async () => {
     ensureAgents();
     cryptoAgents.forEach(a => {
-        a.progress = Math.min(100, a.progress + Math.random()*0.28);
+        a.progress = Math.min(100, a.progress + Math.random()*0.25);
         if (Math.random() > 0.96) a.mistakes = (a.mistakes || 0) + 1;
         if (Math.random() > 0.94) a.wins = (a.wins || 0) + 1;
         if (a.progress > 92 && a.role === "Trainee") {
             a.role = cryptoRoles[Math.floor(Math.random()*cryptoRoles.length)];
-            const topic = trainingTopics[Math.floor(Math.random()*trainingTopics.length)];
+            const topic = cryptoTopics[Math.floor(Math.random()*cryptoTopics.length)];
             addBotLog(`${a.id} spezialisiert → ${a.role} (${topic})`, a.role, Math.floor(a.progress), a.id);
         }
-        if (a.progress >= 98 && Math.random() > 0.93) {
+        if (a.progress >= 98 && Math.random() > 0.94) {
             addBotLog(`${a.id} ist bereit und fragt nach Trader-Status`, a.role, Math.floor(a.progress), a.id);
         }
     });
     forexAgents.forEach(a => {
         const weekend = [0,6].includes(new Date().getDay());
-        a.progress = Math.min(100, a.progress + (weekend ? 0.06 : 0.18) + Math.random()*0.15);
+        a.progress = Math.min(100, a.progress + (weekend ? 0.05 : 0.15) + Math.random()*0.12);
         if (Math.random() > 0.97) a.mistakes = (a.mistakes || 0) + 1;
         if (Math.random() > 0.95) a.wins = (a.wins || 0) + 1;
         if (a.progress > 94 && a.role === "Trainee") {
             a.role = forexRoles[Math.floor(Math.random()*forexRoles.length)];
-            const topic = trainingTopics[Math.floor(Math.random()*trainingTopics.length)];
+            const topic = forexTopics[Math.floor(Math.random()*forexTopics.length)];
             addBotLog(`${a.id} spezialisiert → ${a.role} (${topic})`, a.role, Math.floor(a.progress), a.id);
         }
-        if (a.progress >= 98 && Math.random() > 0.93) {
+        if (a.progress >= 98 && Math.random() > 0.94) {
             addBotLog(`${a.id} ist bereit und fragt nach Trader-Status`, a.role, Math.floor(a.progress), a.id);
         }
     });
     renderAcademy();
 
-    if (Math.random() > 0.62) {
+    if (Math.random() > 0.65) {
         const mainIds = ["Risk","MEME","BTC","ALT","Position","FOREX", ...promotedAgents.map(a => a.id)];
         const agent = mainIds[Math.floor(Math.random()*mainIds.length)];
         let coin = "BTC";
@@ -521,10 +522,10 @@ setInterval(async () => {
 
         if (Math.random() > 0.55) {
             openTrades.unshift({...trade, exit: null});
-            if (openTrades.length > 8) openTrades.pop();
+            if (openTrades.length > 12) openTrades.pop();
         } else {
             liveTrades.unshift(trade);
-            if (liveTrades.length > 40) liveTrades.pop();
+            if (liveTrades.length > 1000) liveTrades.pop();
         }
 
         addBotLog(`${agent} Trade ${coin}${meme ? " ("+meme+")" : ""} ${trade.side} @ ${trade.entry} · PnL ${pnl}%`);
