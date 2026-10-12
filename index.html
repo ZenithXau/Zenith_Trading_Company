@@ -495,8 +495,8 @@ setInterval(async () => {
         else if (coin === "ETH") entry = await getBinancePrice("ETHUSDT") || getSimulatedPrice("ETH");
         else if (coin === "XAU") entry = await getTwelvePrice("XAU/USD") || getSimulatedPrice("XAU");
         else if (coin === "XAG") entry = await getTwelvePrice("XAG/USD") || getSimulatedPrice("XAG");
-        else if (coin === "US30") entry = await getTwelvePrice("DJI") || getSimulatedPrice("US30");
-        else if (coin === "NASDAQ") entry = await getTwelvePrice("IXIC") || getSimulatedPrice("NASDAQ");
+        else if (coin === "US30") entry = await getTwelvePrice("DIA") || getSimulatedPrice("US30");
+        else if (coin === "NASDAQ") entry = await getTwelvePrice("QQQ") || getSimulatedPrice("NASDAQ");
         else entry = getSimulatedPrice(coin);
 
         const isLong = Math.random() > 0.45;
