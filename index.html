@@ -38,7 +38,8 @@ body { margin: 0; background: #0a0a0a; color: #f5f5f5; font-family: -apple-syste
 .journal-entry { background: #1a1a1a; padding: 6px 8px; border-radius: 4px; margin-bottom: 4px; font-size: 11px; border-left: 2px solid #d4af37; }
 .skill-top { background: #1a1a1a; padding: 8px; border-radius: 4px; margin-bottom: 8px; font-size: 12px; border: 1px solid #d4af37; }
 .detail-trade { background: #1a1a1a; padding: 8px; margin-bottom: 4px; border-radius: 4px; font-size: 11px; border-left: 2px solid #d4af37; }
-.promote-btn { background: #22c55e; color: #000; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-top: 8px; }
+.promote-btn, .demote-btn { background: #22c55e; color: #000; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-top: 8px; margin-right: 6px; }
+.demote-btn { background: #ef4444; color: #fff; }
 </style>
 </head>
 <body>
@@ -73,13 +74,7 @@ body { margin: 0; background: #0a0a0a; color: #f5f5f5; font-family: -apple-syste
             <div class="dash-card"><div class="dash-label">PnL</div><div class="dash-value green" id="pnl">+$0.00</div></div>
             <div class="dash-card"><div class="dash-label">WIN RATE</div><div class="dash-value" id="win">0%</div></div>
         </div>
-        <div class="agents" id="mainAgents">
-            <div class="agent" data-agent="Risk"><span class="lamp"></span>RISK<div class="subtitle">Oversight</div></div>
-            <div class="agent" data-agent="MEME"><span class="lamp"></span>MEME-AGENT<div class="subtitle">Wallets</div></div>
-            <div class="agent" data-agent="BTC"><span class="lamp"></span>BTC<div class="subtitle">Bitcoin</div></div>
-            <div class="agent" data-agent="ALT"><span class="lamp"></span>ALT<div class="subtitle">Alts</div></div>
-            <div class="agent" data-agent="Position"><span class="lamp"></span>POSITION<div class="subtitle">Exits</div></div>
-        </div>
+        <div class="agents" id="mainAgents"></div>
         <div id="panel">
             <div id="panel-title"></div>
             <div id="panel-content"></div>
@@ -96,8 +91,8 @@ body { margin: 0; background: #0a0a0a; color: #f5f5f5; font-family: -apple-syste
 </div>
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script>
-const BIN_ID = "6acbcb30ffd5d16053620b81";
-const API_KEY = "$2a$10$qVh/C0VvbSjJM8zneVgIveh48ZcAdkY8.yZ3GlTUs6eiPXDIWIMZ2";
+const BIN_ID = "6acc8dfcffd5d16053637359";
+const ACCESS_KEY = "$2a$10$Q.INdPZI/hpyLQXoNjZLm.cvniQQ3bHQkqCIIXW0wdEH/yjLYTsJC";
 const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
 const TWELVE_KEY = "a8a0ba3bf3194505af4e302c081cfa4c";
 
@@ -106,6 +101,7 @@ let currentSymbol = "BINANCE:BTCUSDT";
 let currentInterval = "1";
 let cryptoAgents = [];
 let forexAgents = [];
+let promotedAgents = [];
 let agentLogs = {};
 let journalEntries = [];
 let liveTrades = [];
@@ -116,28 +112,29 @@ let selectedAgent = null;
 async function loadFromBin() {
     try {
         const res = await fetch(BIN_URL + "/latest", {
-            headers: { "X-Master-Key": API_KEY }
+            headers: { "X-Access-Key": ACCESS_KEY }
         });
         if (!res.ok) throw new Error(res.status);
         const data = await res.json();
         const record = data.record || {};
-        cryptoAgents = record.crypto || Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 20 + Math.random()*40, mistakes: 0, wins: 0 }));
-        forexAgents = record.forex || Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 15 + Math.random()*30, mistakes: 0, wins: 0 }));
+        cryptoAgents = record.crypto || Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 12 + Math.random()*25, mistakes: 0, wins: 0 }));
+        forexAgents = record.forex || Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 8 + Math.random()*20, mistakes: 0, wins: 0 }));
+        promotedAgents = record.promoted || [];
         agentLogs = record.logs || {};
         journalEntries = record.journal || [];
         liveTrades = record.trades || [];
         openTrades = record.open || [];
-        console.log("Loaded", liveTrades.length, "trades");
     } catch (e) {
-        console.warn("Load failed", e);
-        cryptoAgents = Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 20 + Math.random()*40, mistakes: 0, wins: 0 }));
-        forexAgents = Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 15 + Math.random()*30, mistakes: 0, wins: 0 }));
+        cryptoAgents = Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 12 + Math.random()*25, mistakes: 0, wins: 0 }));
+        forexAgents = Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 8 + Math.random()*20, mistakes: 0, wins: 0 }));
+        promotedAgents = [];
         agentLogs = {};
         journalEntries = [];
         liveTrades = [];
         openTrades = [];
     }
     renderAcademy();
+    renderMainAgents();
     restoreJournal();
     updateDashboard();
 }
@@ -155,26 +152,20 @@ function restoreJournal() {
 
 async function saveToBin() {
     try {
-        const res = await fetch(BIN_URL, {
+        await fetch(BIN_URL, {
             method: "PUT",
-            headers: { 
-                "Content-Type": "application/json", 
-                "X-Master-Key": API_KEY
-            },
+            headers: { "Content-Type": "application/json", "X-Access-Key": ACCESS_KEY },
             body: JSON.stringify({
                 crypto: cryptoAgents,
                 forex: forexAgents,
+                promoted: promotedAgents,
                 logs: agentLogs,
                 journal: journalEntries.slice(0, 50),
                 trades: liveTrades.slice(0, 40),
                 open: openTrades
             })
         });
-        if (res.ok) console.log("Saved");
-        else console.warn("Save status", res.status);
-    } catch (e) {
-        console.warn("Save error", e);
-    }
+    } catch (e) {}
 }
 
 function loadTV() {
@@ -227,7 +218,7 @@ function selectAgentEl(el) {
     if (selectedAgent === el) {
         el.classList.remove('selected');
         selectedAgent = null;
-        panel.style.display = "none";
+        document.getElementById('panel').style.display = "none";
         return;
     }
     document.querySelectorAll('.agent').forEach(a => a.classList.remove('selected'));
@@ -309,24 +300,72 @@ const trainingTopics = [
     "News-Impact ETH", "Session-Struktur XAU", "Liquidity Sweep BTC", "Orderblock ETH",
     "MEME-Momentum Scanner", "US30 Session Bias", "NASDAQ Momentum", "Silver Correlation mit Gold"
 ];
-const mainAgents = ["BTC", "MEME", "ALT", "Risk", "Position"];
+const defaultMain = [
+    { id: "Risk", subtitle: "Oversight" },
+    { id: "MEME", subtitle: "Wallets" },
+    { id: "BTC", subtitle: "Bitcoin" },
+    { id: "ALT", subtitle: "Alts" },
+    { id: "Position", subtitle: "Exits" }
+];
 const memeCoins = [
     { name: "BONK", ca: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263" },
     { name: "WIF", ca: "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm" },
     { name: "POPCAT", ca: "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr" }
 ];
 
+function renderMainAgents() {
+    const el = document.getElementById('mainAgents');
+    const all = [...defaultMain.map(a => ({...a, type: "default"})), ...promotedAgents.map(a => ({id: a.id, subtitle: a.role, type: "promoted", data: a}))];
+    el.innerHTML = all.map(a => `
+        <div class="agent" data-agent="${a.id}" data-type="${a.type}">
+            <span class="lamp"></span>${a.id}
+            <div class="subtitle">${a.subtitle}</div>
+        </div>
+    `).join("");
+    el.querySelectorAll('.agent').forEach(agentEl => {
+        agentEl.addEventListener('click', () => {
+            selectAgentEl(agentEl);
+            if (!agentEl.classList.contains('selected')) return;
+            const id = agentEl.dataset.agent;
+            const type = agentEl.dataset.type;
+            panel.style.display = "block";
+            document.getElementById('panel-title').innerHTML = `<b>${id}</b>`;
+            let content = `Session aktiv · Paper-Trading<br>Confidence: ${60 + Math.floor(Math.random()*30)}%`;
+            if (type === "promoted") {
+                content += `<br><button class="demote-btn" data-id="${id}">Zurück in Academy</button>`;
+            }
+            document.getElementById('panel-content').innerHTML = content;
+            const demoteBtn = document.querySelector('.demote-btn');
+            if (demoteBtn) {
+                demoteBtn.onclick = () => {
+                    const ag = promotedAgents.find(x => x.id === id);
+                    if (ag) {
+                        if (id.startsWith("C")) cryptoAgents.push(ag);
+                        else forexAgents.push(ag);
+                        promotedAgents = promotedAgents.filter(x => x.id !== id);
+                        addBotLog(`${id} zurück in Academy (Fortschritt ${Math.floor(ag.progress)}% bleibt erhalten)`, ag.role, Math.floor(ag.progress), id);
+                        renderAcademy();
+                        renderMainAgents();
+                        panel.style.display = "none";
+                        saveToBin();
+                    }
+                };
+            }
+        });
+    });
+}
+
 function renderAcademy() {
     const cEl = document.getElementById('trainCrypto');
     cEl.innerHTML = cryptoAgents.map(a => `
-        <div class="agent ${a.progress >= 95 ? 'ready' : ''}" data-id="${a.id}">
+        <div class="agent ${a.progress >= 98 ? 'ready' : ''}" data-id="${a.id}">
             <span class="lamp"></span>${a.id}
             <div class="subtitle">${a.role} · ${Math.floor(a.progress)}%</div>
         </div>
     `).join("");
     const fEl = document.getElementById('trainForex');
     fEl.innerHTML = forexAgents.map(a => `
-        <div class="agent ${a.progress >= 95 ? 'ready' : ''}" data-id="${a.id}">
+        <div class="agent ${a.progress >= 98 ? 'ready' : ''}" data-id="${a.id}">
             <span class="lamp"></span>${a.id}
             <div class="subtitle">${a.role} · ${Math.floor(a.progress)}%</div>
         </div>
@@ -347,32 +386,26 @@ function renderAcademy() {
                 Wins: ${ag.wins || 0} · Fehler: ${ag.mistakes || 0}<br>
                 <div style="margin-top:6px;">${logs.slice(0,8).map(l => `<div>${l}</div>`).join("")}</div>
             `;
-            if (ag.progress >= 95) {
+            if (ag.progress >= 98) {
                 content += `<button class="promote-btn" data-id="${id}">Als Trader übernehmen?</button>`;
             }
             document.getElementById('panel-content').innerHTML = content;
             const btn = document.querySelector('.promote-btn');
             if (btn) {
                 btn.onclick = () => {
-                    addBotLog(`${id} wurde als Trader übernommen`, ag.role, Math.floor(ag.progress), id);
+                    if (id.startsWith("C")) cryptoAgents = cryptoAgents.filter(x => x.id !== id);
+                    else forexAgents = forexAgents.filter(x => x.id !== id);
+                    promotedAgents.push(ag);
+                    addBotLog(`${id} als Trader übernommen`, ag.role, Math.floor(ag.progress), id);
+                    renderAcademy();
+                    renderMainAgents();
                     panel.style.display = "none";
-                    el.classList.remove('selected');
+                    saveToBin();
                 };
             }
         });
     });
 }
-
-document.getElementById('mainAgents').addEventListener('click', e => {
-    const a = e.target.closest('.agent');
-    if (!a) return;
-    selectAgentEl(a);
-    if (!a.classList.contains('selected')) return;
-    panel.style.display = "block";
-    const name = a.dataset.agent;
-    document.getElementById('panel-title').innerHTML = `<b>${name}</b>`;
-    document.getElementById('panel-content').innerHTML = `Session aktiv · Paper-Trading<br>Confidence: ${60 + Math.floor(Math.random()*30)}%`;
-});
 
 async function getBinancePrice(symbol) {
     try {
@@ -399,36 +432,37 @@ function getSimulatedPrice(coin) {
 
 setInterval(async () => {
     cryptoAgents.forEach(a => {
-        a.progress = Math.min(100, a.progress + Math.random()*2.8);
-        if (Math.random() > 0.92) a.mistakes = (a.mistakes || 0) + 1;
-        if (Math.random() > 0.88) a.wins = (a.wins || 0) + 1;
-        if (a.progress > 82 && a.role === "Trainee") {
+        a.progress = Math.min(100, a.progress + Math.random()*0.28);
+        if (Math.random() > 0.96) a.mistakes = (a.mistakes || 0) + 1;
+        if (Math.random() > 0.94) a.wins = (a.wins || 0) + 1;
+        if (a.progress > 92 && a.role === "Trainee") {
             a.role = cryptoRoles[Math.floor(Math.random()*cryptoRoles.length)];
             const topic = trainingTopics[Math.floor(Math.random()*trainingTopics.length)];
             addBotLog(`${a.id} spezialisiert → ${a.role} (${topic})`, a.role, Math.floor(a.progress), a.id);
         }
-        if (a.progress >= 95 && Math.random() > 0.85) {
+        if (a.progress >= 98 && Math.random() > 0.93) {
             addBotLog(`${a.id} ist bereit und fragt nach Trader-Status`, a.role, Math.floor(a.progress), a.id);
         }
     });
     forexAgents.forEach(a => {
         const weekend = [0,6].includes(new Date().getDay());
-        a.progress = Math.min(100, a.progress + (weekend ? 0.3 : 1.8) + Math.random()*1.2);
-        if (Math.random() > 0.93) a.mistakes = (a.mistakes || 0) + 1;
-        if (Math.random() > 0.89) a.wins = (a.wins || 0) + 1;
-        if (a.progress > 85 && a.role === "Trainee") {
+        a.progress = Math.min(100, a.progress + (weekend ? 0.06 : 0.18) + Math.random()*0.15);
+        if (Math.random() > 0.97) a.mistakes = (a.mistakes || 0) + 1;
+        if (Math.random() > 0.95) a.wins = (a.wins || 0) + 1;
+        if (a.progress > 94 && a.role === "Trainee") {
             a.role = forexRoles[Math.floor(Math.random()*forexRoles.length)];
             const topic = trainingTopics[Math.floor(Math.random()*trainingTopics.length)];
             addBotLog(`${a.id} spezialisiert → ${a.role} (${topic})`, a.role, Math.floor(a.progress), a.id);
         }
-        if (a.progress >= 95 && Math.random() > 0.85) {
+        if (a.progress >= 98 && Math.random() > 0.93) {
             addBotLog(`${a.id} ist bereit und fragt nach Trader-Status`, a.role, Math.floor(a.progress), a.id);
         }
     });
     renderAcademy();
 
     if (Math.random() > 0.62) {
-        const agent = mainAgents[Math.floor(Math.random()*mainAgents.length)];
+        const mainIds = ["Risk","MEME","BTC","ALT","Position", ...promotedAgents.map(a => a.id)];
+        const agent = mainIds[Math.floor(Math.random()*mainIds.length)];
         let coin = "BTC";
         if (agent === "MEME") coin = "MEME";
         else if (agent === "ALT") coin = Math.random() > 0.5 ? "SOL" : "ETH";
@@ -478,15 +512,6 @@ setInterval(async () => {
     }
     saveToBin();
 }, 9000);
-
-setInterval(() => {
-    document.querySelectorAll('#trainCrypto .agent, #trainForex .agent').forEach(a => {
-        const id = a.dataset.id;
-        const list = id.startsWith('C') ? cryptoAgents : forexAgents;
-        const ag = list.find(x => x.id === id);
-        if (ag && ag.progress >= 95) a.classList.add('ready');
-    });
-}, 4000);
 
 loadFromBin();
 loadTV();
