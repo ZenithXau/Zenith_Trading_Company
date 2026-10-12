@@ -128,10 +128,7 @@ async function loadFromBin() {
         const res = await fetch(BIN_URL + "/latest", {
             headers: { "X-Access-Key": ACCESS_KEY }
         });
-        if (!res.ok) {
-            console.warn("Load status:", res.status);
-            throw new Error(res.status);
-        }
+        if (!res.ok) throw new Error(res.status);
         const data = await res.json();
         const record = data.record || {};
         cryptoAgents = record.crypto || [];
@@ -167,10 +164,7 @@ async function saveToBin() {
     try {
         const res = await fetch(BIN_URL, {
             method: "PUT",
-            headers: { 
-                "Content-Type": "application/json", 
-                "X-Access-Key": ACCESS_KEY
-            },
+            headers: { "Content-Type": "application/json", "X-Access-Key": ACCESS_KEY },
             body: JSON.stringify({
                 crypto: cryptoAgents,
                 forex: forexAgents,
@@ -182,7 +176,6 @@ async function saveToBin() {
             })
         });
         console.log("Save status:", res.status);
-        if (!res.ok) console.warn("Save failed", await res.text());
     } catch (e) {
         console.warn("Save error", e);
     }
@@ -437,7 +430,7 @@ async function getBinancePrice(symbol) {
 
 async function getTwelvePrice(symbol) {
     try {
-        const res = await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbol)}&apikey=${TWELVE_KEY}`);
+        const res = await fetch(`https://api.twelvedata.com/price?symbol=${symbol}&apikey=${TWELVE_KEY}`);
         const data = await res.json();
         if (data.price) return parseFloat(data.price);
     } catch (e) {}
@@ -493,8 +486,8 @@ setInterval(async () => {
         if (coin === "BTC") entry = await getBinancePrice("BTCUSDT") || getSimulatedPrice("BTC");
         else if (coin === "SOL") entry = await getBinancePrice("SOLUSDT") || getSimulatedPrice("SOL");
         else if (coin === "ETH") entry = await getBinancePrice("ETHUSDT") || getSimulatedPrice("ETH");
-        else if (coin === "XAU") entry = await getTwelvePrice("XAU/USD") || getSimulatedPrice("XAU");
-        else if (coin === "XAG") entry = await getTwelvePrice("XAG/USD") || getSimulatedPrice("XAG");
+        else if (coin === "XAU") entry = await getTwelvePrice("XAUUSD") || getSimulatedPrice("XAU");
+        else if (coin === "XAG") entry = await getTwelvePrice("XAGUSD") || getSimulatedPrice("XAG");
         else if (coin === "US30") entry = await getTwelvePrice("DIA") || getSimulatedPrice("US30");
         else if (coin === "NASDAQ") entry = await getTwelvePrice("QQQ") || getSimulatedPrice("NASDAQ");
         else entry = getSimulatedPrice(coin);
