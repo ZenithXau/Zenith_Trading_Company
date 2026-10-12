@@ -116,9 +116,9 @@ let selectedAgent = null;
 async function loadFromBin() {
     try {
         const res = await fetch(BIN_URL + "/latest", {
-            headers: { "X-Master-Key": API_KEY, "X-Access-Key": API_KEY }
+            headers: { "X-Master-Key": API_KEY }
         });
-        if (!res.ok) throw new Error("bin error");
+        if (!res.ok) throw new Error(res.status);
         const data = await res.json();
         const record = data.record || {};
         cryptoAgents = record.crypto || Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 20 + Math.random()*40, mistakes: 0, wins: 0 }));
@@ -127,9 +127,9 @@ async function loadFromBin() {
         journalEntries = record.journal || [];
         liveTrades = record.trades || [];
         openTrades = record.open || [];
-        console.log("Loaded from bin", liveTrades.length, "trades");
+        console.log("Loaded", liveTrades.length, "trades");
     } catch (e) {
-        console.warn("Bin load failed, using local", e);
+        console.warn("Load failed", e);
         cryptoAgents = Array.from({length:5}, (_,i) => ({ id: "C"+(i+1), role: "Trainee", progress: 20 + Math.random()*40, mistakes: 0, wins: 0 }));
         forexAgents = Array.from({length:10}, (_,i) => ({ id: "F"+(i+1), role: "Trainee", progress: 15 + Math.random()*30, mistakes: 0, wins: 0 }));
         agentLogs = {};
@@ -159,8 +159,7 @@ async function saveToBin() {
             method: "PUT",
             headers: { 
                 "Content-Type": "application/json", 
-                "X-Master-Key": API_KEY,
-                "X-Access-Key": API_KEY
+                "X-Master-Key": API_KEY
             },
             body: JSON.stringify({
                 crypto: cryptoAgents,
@@ -171,9 +170,10 @@ async function saveToBin() {
                 open: openTrades
             })
         });
-        if (res.ok) console.log("Saved to bin");
+        if (res.ok) console.log("Saved");
+        else console.warn("Save status", res.status);
     } catch (e) {
-        console.warn("Save failed", e);
+        console.warn("Save error", e);
     }
 }
 
@@ -392,7 +392,7 @@ async function getTwelvePrice(symbol) {
 }
 
 function getSimulatedPrice(coin) {
-    const ranges = { BTC: 84150, SOL: 147.8, ETH: 3412, XAU: 2648, XAG: 31.4, US30: 42800, NASDAQ: 19850, MEME: 0.00042 };
+    const ranges = { BTC: 84150, SOL: 147.8, ETH: 3412, XAU: 2648, XAG: 60.8, US30: 42800, NASDAQ: 19850, MEME: 0.00042 };
     const base = ranges[coin] || 100;
     return base + (Math.random()-0.5)*base*0.004;
 }
@@ -446,7 +446,7 @@ setInterval(async () => {
 
         const isLong = Math.random() > 0.45;
         const pnl = (Math.random()*2.4 - 0.8).toFixed(2);
-        const decimals = coin === "MEME" ? 6 : 2;
+        const decimals = coin === "MEME" ? 6 : (coin === "XAG" ? 3 : 2);
         const tp = (entry * (isLong ? 1.011 : 0.989)).toFixed(decimals);
         const sl = (entry * (isLong ? 0.989 : 1.011)).toFixed(decimals);
         const exit = (entry * (1 + parseFloat(pnl)/100)).toFixed(decimals);
