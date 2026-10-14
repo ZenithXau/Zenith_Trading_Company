@@ -124,9 +124,25 @@ let agentLogs = {};
 let journalEntries = [];
 let liveTrades = [];
 let openTrades = [];
+let todayTrades = [];
 let panelMode = null;
 let selectedAgent = null;
 let currentFilter = "";
+let lastResetDate = null;
+
+function getTodayKey() {
+    const d = new Date();
+    return d.getFullYear() + "-" + (d.getMonth()+1) + "-" + d.getDate();
+}
+
+function checkDailyReset() {
+    const today = getTodayKey();
+    if (lastResetDate !== today) {
+        todayTrades = [];
+        lastResetDate = today;
+        console.log("Daily reset at", today);
+    }
+}
 
 function ensureAgents() {
     if (!cryptoAgents || !cryptoAgents.length) {
@@ -140,6 +156,7 @@ function ensureAgents() {
     if (!journalEntries) journalEntries = [];
     if (!liveTrades) liveTrades = [];
     if (!openTrades) openTrades = [];
+    if (!todayTrades) todayTrades = [];
 }
 
 async function loadFromBin() {
@@ -155,7 +172,10 @@ async function loadFromBin() {
         journalEntries = record.journal || [];
         liveTrades = record.trades || [];
         openTrades = record.open || [];
+        todayTrades = record.todayTrades || [];
+        lastResetDate = record.lastResetDate || null;
     } catch (e) {}
+    checkDailyReset();
     ensureAgents();
     renderAcademy();
     renderMainAgents();
@@ -189,7 +209,9 @@ async function saveToBin() {
                 logs: agentLogs,
                 journal: journalEntries.slice(0, 80),
                 trades: liveTrades.slice(0, 1000),
-                open: openTrades
+                open: openTrades,
+                todayTrades: todayTrades,
+                lastResetDate: lastResetDate
             })
         });
     } catch (e) {}
@@ -285,9 +307,9 @@ function showTrades(mode) {
     if (mode === "total") document.getElementById('totalCard').classList.add('active');
     if (mode === "actual") document.getElementById('actualCard').classList.add('active');
     panel.style.display = "block";
-    const list = mode === "total" ? liveTrades : openTrades;
+    const list = mode === "total" ? todayTrades : openTrades;
     document.getElementById('panel-title').innerHTML = mode === "total" 
-        ? `<b>Alle Trades</b> (${list.length})` 
+        ? `<b>Trades heute</b> (${list.length})` 
         : `<b>Offene Positionen</b> (${list.length})`;
     document.getElementById('panel-content').innerHTML = list.map(t => `
         <div class="detail-trade">
@@ -304,7 +326,8 @@ document.getElementById('totalCard').addEventListener('click', () => showTrades(
 document.getElementById('actualCard').addEventListener('click', () => showTrades("actual"));
 
 function updateDashboard() {
-    document.getElementById('total').textContent = liveTrades.length;
+    checkDailyReset();
+    document.getElementById('total').textContent = todayTrades.length;
     document.getElementById('actual').textContent = openTrades.length;
     document.getElementById('grandTotal').textContent = liveTrades.length;
     const totalPnl = liveTrades.reduce((s, t) => s + (t.pnl || 0), 0);
@@ -451,6 +474,7 @@ function getSimulatedPrice(coin) {
 }
 
 setInterval(async () => {
+    checkDailyReset();
     ensureAgents();
     cryptoAgents.forEach(a => {
         a.progress = Math.min(100, a.progress + Math.random()*0.25);
@@ -485,12 +509,15 @@ setInterval(async () => {
         const mainIds = ["Risk","MEME","BTC","ALT","Position","FOREX", ...promotedAgents.map(a => a.id)];
         const agent = mainIds[Math.floor(Math.random()*mainIds.length)];
         let coin = "BTC";
-        if (agent === "BTC") coin = "BTC";
+
+        // Strict market rules
+        if (agent === "BTC" || agent.startsWith("C") && agent.includes("BTC")) coin = "BTC";
         else if (agent === "ALT") coin = Math.random() > 0.5 ? "SOL" : "ETH";
         else if (agent === "MEME") coin = "MEME";
-        else if (agent === "FOREX") coin = ["XAU","XAG","US30","NASDAQ"][Math.floor(Math.random()*4)];
+        else if (agent === "FOREX" || agent.startsWith("F")) coin = ["XAU","XAG","US30","NASDAQ"][Math.floor(Math.random()*4)];
         else if (agent === "Risk") coin = ["BTC","SOL","ETH","XAU"][Math.floor(Math.random()*4)];
         else if (agent === "Position") coin = ["BTC","SOL","ETH","XAU","XAG"][Math.floor(Math.random()*5)];
+        else if (agent.startsWith("C")) coin = ["BTC","SOL","ETH"][Math.floor(Math.random()*3)];
         else coin = "BTC";
 
         let entry = 100;
@@ -526,6 +553,8 @@ setInterval(async () => {
         } else {
             liveTrades.unshift(trade);
             if (liveTrades.length > 1000) liveTrades.pop();
+            todayTrades.unshift(trade);
+            if (todayTrades.length > 500) todayTrades.pop();
         }
 
         addBotLog(`${agent} Trade ${coin}${meme ? " ("+meme+")" : ""} ${trade.side} @ ${trade.entry} · PnL ${pnl}%`);
