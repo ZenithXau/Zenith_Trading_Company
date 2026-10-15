@@ -242,7 +242,7 @@ document.getElementById('actualCard').addEventListener('click', () => showTrades
 function updateDashboard() {
     document.getElementById('total').textContent = state.todayTrades.length;
     document.getElementById('actual').textContent = state.openTrades.length;
-    document.getElementById('grandTotal').textContent = state.liveTrades.length;
+    document.getElementById('grandTotal').textContent = state.totalTradeCount || state.liveTrades.length;
     const totalPnl = state.liveTrades.reduce((s, t) => s + (t.pnl || 0), 0);
     document.getElementById('pnl').textContent = (totalPnl >= 0 ? "+" : "") + totalPnl.toFixed(2);
     document.getElementById('pnl').className = "dash-value " + (totalPnl >= 0 ? "green" : "red");
